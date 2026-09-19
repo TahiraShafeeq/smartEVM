@@ -11,16 +11,6 @@
 
 SmartEVM translates Scrum data (sprints, tasks, story points, defects) into the classic EVM indices that project sponsors understand: **PV, EV, AC, CPI, SPI, EAC, VAC**. It adds a custom **Quality Performance Index (QPI)**, snapshots every calculation to a history table, pulls live issues from a public JIRA instance, and exposes four ML models for cost, schedule, defect and health forecasting.
 
-<!--
-SCREENSHOTS - add 2-3 images to docs/screenshots/ and uncomment:
-
-![Dashboard](docs/screenshots/dashboard.png)
-![EVM Dashboard](docs/screenshots/evm-dashboard.png)
-![ML Predictions](docs/screenshots/ml-predictions.png)
--->
-
----
-
 ## Table of contents
 
 1. [What this project demonstrates](#what-this-project-demonstrates)
@@ -34,8 +24,6 @@ SCREENSHOTS - add 2-3 images to docs/screenshots/ and uncomment:
 9. [Testing](#testing)
 10. [Project structure](#project-structure)
 11. [Design decisions and known limitations](#design-decisions-and-known-limitations)
-12. [Roadmap](#roadmap)
-
 ---
 
 ## What this project demonstrates
@@ -188,89 +176,95 @@ Interactive documentation is served by FastAPI at **http://localhost:8000/docs**
 **JIRA import behaviour:** fetches up to 50 issues from a public Atlassian project (`JRASERVER`, `CONFSERVER`, `BSERV`, or `BAM`), maps JIRA statuses onto `To Do / In Progress / Done`, upserts tasks by `external_id`, derives quality metrics, and commits everything in one transaction.
 
 ---
+Getting started
+Prerequisites
+Python 3.11+
+Node.js 18+ and npm
+Oracle Database 26ai Free installed locally (Docker is an optional alternative for running the database only)
+SQL*Plus, SQLcl, or SQL Developer to run the .sql scripts
+1. Set up Oracle Database
 
-## Getting started
+SmartEVM itself is not containerised: the backend and frontend run directly on your machine. Only the database needs to be running, either installed locally or (optionally) started with Docker.
 
-### Prerequisites
+Option A: local install (default). Install Oracle Database Free, make sure the listener is running on localhost:1521 with the FREEPDB1 service, then connect as an administrator and create the application user:
 
-- Python 3.11+
-- Node.js 18+ and npm
-- Docker (recommended for Oracle) or a local Oracle Database Free install
-- SQL*Plus, SQLcl, or SQL Developer to run the `.sql` scripts
+bash
+sqlplus system/<sys-password>@localhost:1521/FREEPDB1
 
-### 1. Start Oracle Database
+Option B: Oracle in Docker (database only, optional). If you do not want to install Oracle locally:
 
 ```bash
 docker run -d --name oracle-free -p 1521:1521 \
   -e ORACLE_PWD=<choose-a-sys-password> \
   container-registry.oracle.com/database/free:latest
 ```
+Wait until docker logs oracle-free reports the database is ready, then connect with the same sqlplus command as above.
 
-Wait until `docker logs oracle-free` reports the database is ready, then create the application user:
+Create the application user (both options):
 
-```bash
-sqlplus system/<sys-password>@localhost:1521/FREEPDB1
-```
-
-```sql
+sql
 CREATE USER evm_owner IDENTIFIED BY "<choose-an-app-password>";
 GRANT CREATE SESSION, CREATE TABLE, CREATE VIEW, CREATE PROCEDURE,
       CREATE TRIGGER, CREATE SEQUENCE TO evm_owner;
 ALTER USER evm_owner QUOTA UNLIMITED ON USERS;
-```
+2. Create the schema and load sample data
 
-### 2. Create the schema and load sample data
-
-> `01_schema.sql` drops and recreates all SmartEVM tables. Do not run it against a database holding data you want to keep.
+01_schema.sql drops and recreates all SmartEVM tables. Do not run it against a database holding data you want to keep.
 
 ```bash
 sqlplus evm_owner/<app-password>@localhost:1521/FREEPDB1 @backend/queries/01_schema.sql
 sqlplus evm_owner/<app-password>@localhost:1521/FREEPDB1 @backend/queries/02_sample_data.sql
 ```
+Optional: run 03_queries.sql (analytics) and 04_optimization_validation.sql (audits and the snapshot procedure).
 
-Optional: run `03_queries.sql` (analytics) and `04_optimization_validation.sql` (audits and the snapshot procedure).
-
-### 3. Run the backend
-
+3. Run the backend
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
+```
+# activate the virtual environment
+```bash
+.venv\Scripts\activate               # Windows
+source .venv/bin/activate            # macOS / Linux
 pip install -r requirements.txt
+```
 
-cp .env.example .env                 # then edit the values
+# create your env file, then open .env and enter your Oracle credentials
+```bash
+copy .env.example .env               # Windows
+cp .env.example .env                 # macOS / Linux
+
 python db_connection.py              # expect: "Success! Python is now talking to Oracle."
 python schema_validator.py           # expect: all 7 tables present
 
-uvicorn fastapi_app:app --reload --port 8000
+python -m uvicorn fastapi_app:app --reload --port 8000
 ```
+Run uvicorn from inside the backend/ folder. The modules import each other directly, so it will not start from the repository root.
 
 Open http://localhost:8000/docs.
 
-**Backend environment variables (`backend/.env`):**
+Backend environment variables (backend/.env):
 
-| Variable | Example | Description |
-|---|---|---|
-| `ORACLE_USER` | `evm_owner` | Application schema user |
-| `ORACLE_PASSWORD` | *(your password)* | Never commit this file |
-| `ORACLE_DSN` | `localhost:1521/FREEPDB1` | Host:port/service |
-
-### 4. Run the frontend
-
+Variable	Example	Description
+ORACLE_USER	evm_owner	Application schema user
+ORACLE_PASSWORD	(your password)	Never commit this file
+ORACLE_DSN	localhost:1521/FREEPDB1	Host:port/service
+4. Run the frontend
 ```bash
 cd frontend
-cp .env.example .env                 # VITE_API_BASE_URL=http://localhost:8000
+copy .env.example .env               # Windows   (macOS / Linux: cp .env.example .env)
 npm install
 npm run dev
 ```
 
+frontend/.env must contain VITE_API_BASE_URL=http://localhost:8000.
+
 Open http://localhost:8080.
 
-| Variable (`frontend/.env`) | Required | Description |
-|---|---|---|
-| `VITE_API_BASE_URL` | Yes, for real data | FastAPI base URL. **If unset, the UI runs on in-browser mock data** and shows a "Demo data" badge |
-| `VITE_AUTH0_DOMAIN`, `VITE_AUTH0_CLIENT_ID` | No | Enable Auth0 login; otherwise a demo user is used |
-| `VITE_AUTH0_AUDIENCE`, `VITE_AUTH0_ROLES_CLAIM` | No | API audience and the JWT claim holding `Admin` / `Manager` / `Viewer` |
+Variable (frontend/.env)	Required	Description
+VITE_API_BASE_URL	Yes, for real data	FastAPI base URL. If unset, the UI runs on in-browser mock data and shows a "Demo data" badge
+VITE_AUTH0_DOMAIN, VITE_AUTH0_CLIENT_ID	No	Enable Auth0 login; otherwise a demo user is used
+VITE_AUTH0_AUDIENCE, VITE_AUTH0_ROLES_CLAIM	No	API audience and the JWT claim holding Admin / Manager / Viewer
 
 ### 5. Try the end-to-end flow
 
@@ -283,6 +277,28 @@ Using Swagger (`/docs`) or the UI:
 5. `POST /ml/health` with the CPI/SPI/QPI values from step 3 to get a health forecast.
 
 ---
+Quick run (after the first-time setup above)
+
+Open two terminals and keep both running.
+
+```bash
+# Terminal 1: backend
+cd backend
+.venv\Scripts\activate                # Windows   (macOS / Linux: source .venv/bin/activate)
+python -m uvicorn fastapi_app:app --reload --port 8000
+```
+# Swagger UI -> http://localhost:8000/docs
+
+# Terminal 2: frontend
+```bash
+cd frontend
+npm  install
+npm run dev
+```
+
+# App        -> http://localhost:8080
+
+Make sure the Oracle database is running first (if you used the Docker option: docker start oracle-free).
 
 ## Testing
 
@@ -336,24 +352,9 @@ Being explicit about these is deliberate; each has a clear upgrade path.
 - **Authentication is UI-level.** Role gating in the React app is driven by Auth0 JWT claims, but the API does not yet verify tokens. Do not expose the API publicly as-is.
 - **JIRA import targets one sprint.** Imported issues land in the project's first sprint (auto-created if none exists), so multi-sprint history is not reconstructed from JIRA.
 
----
-
-## Roadmap
-
-- [ ] Replace synthetic ML training data with real `EVM_History` snapshots; report proper train/test metrics and persist models with `joblib`
-- [ ] Add an actual-cost ledger table and time-phased PV baseline
-- [ ] Backend endpoints for `/ledger/{project_id}`, risk index, anomaly detection and what-if simulation (currently demo data in the UI)
-- [ ] JWT verification and role checks in FastAPI
-- [ ] Connection pooling (`oracledb.create_pool`) and a global error-handling layer
-- [ ] Dockerfile / `docker-compose.yml` for one-command startup
-- [ ] CI (GitHub Actions): backend unit tests, frontend lint and build
-
----
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
-
-## Author
 
 **<Your Name>** ([GitHub](https://github.com/<your-username>) · [LinkedIn](https://www.linkedin.com/in/<your-handle>))
