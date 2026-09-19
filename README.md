@@ -357,4 +357,4 @@ Being explicit about these is deliberate; each has a clear upgrade path.
 
 MIT. See [LICENSE](LICENSE).
 
-**<Your Name>** ([GitHub](https://github.com/<your-username>) · [LinkedIn](https://www.linkedin.com/in/<your-handle>))
+**TAHIRA SHAFEEQ** ([GitHub](https://github.com/TahiraShafeeq) · [LinkedIn](https://www.linkedin.com/in/tahirashafeeq/))
